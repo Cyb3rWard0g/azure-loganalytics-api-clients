@@ -1,19 +1,32 @@
+# Author: Roberto Rodriguez (@Cyb3rWard0g)
+# License: GPL-3.0
+
 # Reference: https://docs.microsoft.com/en-us/azure/azure-monitor/platform/data-collector-api#powershell-sample
 
-# WORK IN PROGRESS..
+[CmdletBinding()]
+param (
+    [Parameter(Mandatory=$true)]
+    [string]$WorkspaceId,
 
-# Replace with your Workspace ID
-$CustomerId = "xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"  
+    [Parameter(Mandatory=$true)]
+    [string]$WorkspaceSharedKey,
 
-# Replace with your Primary Key
-$SharedKey = "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+    [Parameter(Mandatory=$true)]
+    [string]$LogType,
 
-# Specify the name of the record type that you'll be creating
-$LogType = "MyRecordType"
+    [Parameter(Mandatory=$false)]
+    [string]$TimeStampField,
 
-# You can use an optional field to specify the timestamp from the data. If the time field is not specified, Azure Monitor assumes the time is the message ingestion time
-$TimeStampField = "DateValue"
+    [Parameter(Mandatory=$true)]
+    [ValidateScript({
+        if( -Not ($_ | Test-Path) ){
+            throw "File or folder does not exist"
+        }
+        return $true
+    })]
+    [System.IO.FileInfo]$FilePath
 
+)
 
 # Create two records with the same set of properties to create
 $json = @"
@@ -32,25 +45,25 @@ $json = @"
 "@
 
 # Create the function to create the authorization signature
-Function Build-Signature ($customerId, $sharedKey, $date, $contentLength, $method, $contentType, $resource)
+Function Build-Signature ($WorkspaceId, $WorkspaceSharedKey, $date, $contentLength, $method, $contentType, $resource)
 {
     $xHeaders = "x-ms-date:" + $date
     $stringToHash = $method + "`n" + $contentLength + "`n" + $contentType + "`n" + $xHeaders + "`n" + $resource
 
     $bytesToHash = [Text.Encoding]::UTF8.GetBytes($stringToHash)
-    $keyBytes = [Convert]::FromBase64String($sharedKey)
+    $keyBytes = [Convert]::FromBase64String($WorkspaceSharedKey)
 
     $sha256 = New-Object System.Security.Cryptography.HMACSHA256
     $sha256.Key = $keyBytes
     $calculatedHash = $sha256.ComputeHash($bytesToHash)
     $encodedHash = [Convert]::ToBase64String($calculatedHash)
-    $authorization = 'SharedKey {0}:{1}' -f $customerId,$encodedHash
+    $authorization = 'SharedKey {0}:{1}' -f $WorkspaceId,$encodedHash
     return $authorization
 }
 
 
 # Create the function to create and post the request
-Function Post-LogAnalyticsData($customerId, $sharedKey, $body, $logType)
+Function Post-LogAnalyticsData($WorkspaceId, $WorkspaceSharedKey, $body, $logType)
 {
     $method = "POST"
     $contentType = "application/json"
@@ -58,14 +71,14 @@ Function Post-LogAnalyticsData($customerId, $sharedKey, $body, $logType)
     $rfc1123date = [DateTime]::UtcNow.ToString("r")
     $contentLength = $body.Length
     $signature = Build-Signature `
-        -customerId $customerId `
-        -sharedKey $sharedKey `
+        -customerId $WorkspaceId `
+        -sharedKey $WorkspaceSharedKey `
         -date $rfc1123date `
         -contentLength $contentLength `
         -method $method `
         -contentType $contentType `
         -resource $resource
-    $uri = "https://" + $customerId + ".ods.opinsights.azure.com" + $resource + "?api-version=2016-04-01"
+    $uri = "https://" + $WorkspaceId + ".ods.opinsights.azure.com" + $resource + "?api-version=2016-04-01"
 
     $headers = @{
         "Authorization" = $signature;
@@ -80,4 +93,4 @@ Function Post-LogAnalyticsData($customerId, $sharedKey, $body, $logType)
 }
 
 # Submit the data to the API endpoint
-Post-LogAnalyticsData -customerId $customerId -sharedKey $sharedKey -body ([System.Text.Encoding]::UTF8.GetBytes($json)) -logType $logType
+Post-LogAnalyticsData -customerId $WorkspaceId -sharedKey $WorkspaceSharedKey -body ([System.Text.Encoding]::UTF8.GetBytes($json)) -logType $logType
