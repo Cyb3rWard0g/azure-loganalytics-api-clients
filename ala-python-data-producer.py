@@ -189,6 +189,6 @@ for dataset in all_files:
                 event_count += 1
     log.info(f'Finished Processing: {dataset}')
     log.info(f'Total Events Processed: {event_count}')
-    log.info(f'Total Bytes Processed Processed: {json_current_size} bytes')
+    log.info(f'Total Bytes Processed: {json_current_size} bytes')
     t.close()
     outer.update(1)
