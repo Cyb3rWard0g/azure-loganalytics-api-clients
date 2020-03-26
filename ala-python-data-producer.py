@@ -131,7 +131,7 @@ for dataset in all_files:
         position=1
     )
 
-    # Read each JSON object from file in binary format 
+    # Read each JSON record in binary format 
     for line in open(f"{dataset}", 'rb'):
         # Update progress bar with current bytes size
         t.update(len(line))

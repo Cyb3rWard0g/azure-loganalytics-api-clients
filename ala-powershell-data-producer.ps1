@@ -34,6 +34,25 @@ param (
 
 )
 
+@("
+   _____  .____       _____    ________          __          
+  /  _  \ |    |     /  _  \   \______ \ _____ _/  |______   
+ /  /_\  \|    |    /  /_\  \   |    |  \\__  \\   __\__  \  
+/    |    \    |___/    |    \  |    `   \/ __ \|  |  / __ \_
+\____|__  /_______ \____|__  / /_______  (____  /__| (____  /
+        \/        \/       \/          \/     \/          \/ 
+__________                   .___                            
+\______   \_______  ____   __| _/_ __   ____  ___________    
+ |     ___/\_  __ \/  _ \ / __ |  |  \_/ ___\/ __ \_  __ \   
+ |    |     |  | \(  <_> ) /_/ |  |  /\  \__\  ___/|  | \/   
+ |____|     |__|   \____/\____ |____/  \___  >___  >__|      
+                              \/           \/    \/      V0.0.1
+
+Creator: Roberto Rodriguez @Cyb3rWard0g
+License: GPL-3.0
+ 
+")
+
 # Aggregate files from input paths
 $all_files = @()
 foreach ($file in $FilePath){
@@ -106,7 +125,8 @@ Function Post-LogAnalyticsData($customerId, $sharedkey, $body, $logType)
 
 $APILimitBytes = 30 * 1mb
 
-foreach ($dataset in $all_files){
+foreach ($dataset in $all_files)
+{
     $total_file_size = (get-item -Path $dataset).Length
     $json_records = @()
     $json_current_size = 0
@@ -118,7 +138,7 @@ foreach ($dataset in $all_files){
         $lineSize = [System.Text.ASCIIEncoding]::UTF8.GetByteCount($line)
         $json_current_size += ($lineSize + 1 )
 
-        Write-Progress -Activity “Processing files” -status "Processing $dataset” -percentComplete ($json_current_size / $total_file_size * 100)
+        Write-Progress -Activity "Processing files" -status "Processing $dataset" -percentComplete ($json_current_size / $total_file_size * 100)
 
         if ($PackMessage)
         {
