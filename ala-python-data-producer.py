@@ -21,6 +21,7 @@ from time import sleep
 import os
 import glob
 import sys
+import logging
 
 sys.stderr.write(r"""
    _____  .____       _____    ________          __          
@@ -60,8 +61,19 @@ parser.add_argument("-k", "--shared-key", help="Log Analytics Primary Shared Key
 parser.add_argument("-l", "--log-type", help="Log Analytics Custom Logs table name", type=str , required=True)
 parser.add_argument('-f', "--file-path", nargs='+', help="Path of JSON file(s) or folder(s) of JSON files", required=True)
 parser.add_argument("-p", "--pack-message", help="Packs each JSON object under a 'Message' field to avoid exceeding the max number (500) of custom fields when sending multiple datasets", action="store_true", default=False)
+parser.add_argument("-d", "--debug", help="Print lots of debugging statements", action="store_const", dest="loglevel", const=logging.DEBUG, default=logging.WARNING)
+parser.add_argument("-v", "--verbose", help="Be verbose", action="store_const", dest="loglevel", const=logging.INFO)
 
 args = parser.parse_args()
+
+# Setting Logging
+class TqdmStream(object):
+  @classmethod
+  def write(_, msg):
+    tqdm.write(msg, end='')
+
+logging.basicConfig(level=args.loglevel, stream=TqdmStream)
+log = logging.getLogger(__name__)
 
 # Initial Workspace Variables
 WORKSPACE_ID = args.workspace_id
@@ -106,6 +118,8 @@ def post_data(WORKSPACE_ID, WORKSPACE_SHARED_KEY, body, LOG_TYPE):
         'Log-Type': LOG_TYPE,
         'x-ms-date': rfc1123date
     }
+
+    log.info(f'Sending {content_length} bytes')
     response = requests.post(uri,data=body, headers=headers)
     if (response.status_code >= 200 and response.status_code <= 299):
         return True
@@ -117,11 +131,13 @@ outer = tqdm(total=len(all_files), desc='Files', position=0)
 
 # Proces all JSON File(s)
 for dataset in all_files:
+    total_file_size = os.path.getsize(f"{dataset}")
     json_records = []
     json_current_size = 0
+    event_count = 0
     
+    log.info(f'Started to process {dataset}')
     # Initialize file reader progress bar
-    total_file_size = os.path.getsize(f"{dataset}")
     t = tqdm(
         total=total_file_size,
         unit='B',
@@ -131,34 +147,43 @@ for dataset in all_files:
         position=1
     )
 
-    # Read each JSON record in binary format 
-    for line in open(f"{dataset}", 'rb'):
-        # Update progress bar with current bytes size
-        t.update(len(line))
-        sleep(0.01)
-        
-        # If you want to pack each JSON object under field name Message
-        if args.pack_message:
-            message = dict()
-            message_string = json.dumps(json.loads(line.decode('utf-8')))
-            message['message'] = message_string
-        else:
-            message = json.loads(line.decode('utf-8'))
-        
-        # Maximum of 30 MB per post to Azure Monitor Data Collector API
-        if (json_current_size + len(line)) < 31457280:
-            json_records.append(message)
+    # Read each JSON record in binary format
+    with open(f"{dataset}", 'rb') as f:
+        for line in f:
+            # Update progress bar with current bytes size
+            t.update(len(line))
+
+            log.debug(f'Processing {len(line)} bytes')
+            # If you want to pack each JSON object under field name Message
+            if args.pack_message:
+                message = dict()
+                message_string = json.dumps(json.loads(line.decode('utf-8')))
+                message['message'] = message_string
+            else:
+                message = json.loads(line.decode('utf-8'))
+            
+            # Calculating new size of list
+            new_list = json_records.copy()
+            new_list.append(message)
+            new_body = json.dumps(new_list)
+            new_body_size = len(new_body)
+    
             json_current_size += len(line)
-        else:
-            body = json.dumps(json_records)
-            post_data(WORKSPACE_ID, WORKSPACE_SHARED_KEY, body, LOG_TYPE)
-            # Reset JSON records list internally on each POST request while still reading file
-            json_records = []
-            json_current_size = 0
-        
-        # If you get to read the whole file without reaching the 30MB limit per post
-        if json_current_size == total_file_size:
-            body = json.dumps(json_records)
-            post_data(WORKSPACE_ID, WORKSPACE_SHARED_KEY, body, LOG_TYPE)
+            # Maximum of 30 MB per post to Azure Monitor Data Collector API but splitting it in 5MB chunks.
+            if new_body_size < 5242880 and json_current_size != total_file_size:
+                json_records.append(message)
+                event_count += 1
+            else:
+                if json_current_size == total_file_size:
+                    json_records.append(message)
+                    log.debug(f'Appending last {len(json.dumps(json_records))} bytes')
+                body = json.dumps(json_records)
+                post_data(WORKSPACE_ID, WORKSPACE_SHARED_KEY, body, LOG_TYPE)
+                if json_current_size != total_file_size:
+                    json_records = [message]
+                    log.debug(f'carrying over {len(json.dumps(json_records))} bytes')
+                event_count += 1
+    log.info(f'Finished processing {dataset}')
+    log.info(f'Total events processed: {event_count}')
     t.close()
     outer.update(1)
