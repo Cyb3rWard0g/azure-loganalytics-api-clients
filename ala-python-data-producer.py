@@ -153,7 +153,6 @@ for dataset in all_files:
             # Update progress bar with current bytes size
             t.update(len(line))
 
-            log.debug(f'Processing {len(line)} bytes')
             # If you want to pack each JSON object under field name Message
             if args.pack_message:
                 message = dict()
@@ -162,12 +161,17 @@ for dataset in all_files:
             else:
                 message = json.loads(line.decode('utf-8'))
             
+            log.debug(f"############ Event {event_count} ###############")
+            log.debug(f'Processing {len(line)} bytes')
+
             # Calculating new size of list
             new_list = json_records.copy()
             new_list.append(message)
             new_body = json.dumps(new_list)
             new_body_size = len(new_body)
-    
+
+            log.debug(f"Compressed Message Array: {new_body_size}")
+
             json_current_size += len(line)
             # Maximum of 30 MB per post to Azure Monitor Data Collector API but splitting it in 5MB chunks.
             if new_body_size < 5242880 and json_current_size != total_file_size:
@@ -176,14 +180,15 @@ for dataset in all_files:
             else:
                 if json_current_size == total_file_size:
                     json_records.append(message)
-                    log.debug(f'Appending last {len(json.dumps(json_records))} bytes')
+                    log.debug(f'Appending last {len(json.dumps(message))} bytes')
                 body = json.dumps(json_records)
                 post_data(WORKSPACE_ID, WORKSPACE_SHARED_KEY, body, LOG_TYPE)
                 if json_current_size != total_file_size:
                     json_records = [message]
-                    log.debug(f'carrying over {len(json.dumps(json_records))} bytes')
+                    log.debug(f'carrying over {len(json.dumps(message))} bytes')
                 event_count += 1
-    log.info(f'Finished processing {dataset}')
-    log.info(f'Total events processed: {event_count}')
+    log.info(f'Finished Processing: {dataset}')
+    log.info(f'Total Events Processed: {event_count}')
+    log.info(f'Total Bytes Processed Processed: {json_current_size} bytes')
     t.close()
     outer.update(1)

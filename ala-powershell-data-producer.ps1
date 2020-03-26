@@ -123,8 +123,8 @@ Function Post-LogAnalyticsData($customerId, $sharedkey, $body, $logType)
         }
     }
     write-verbose "Total Bytes Sent: $contentLength bytes"
-    #$response = Invoke-WebRequest -Uri $uri -Method $method -ContentType $contentType -Headers $headers -Body $body -UseBasicParsing -Verbose
-    #return $response.StatusCode
+    $response = Invoke-WebRequest -Uri $uri -Method $method -ContentType $contentType -Headers $headers -Body $body -UseBasicParsing -Verbose
+    return $response.StatusCode
 
 }
 
@@ -162,12 +162,12 @@ foreach ($dataset in $all_files)
         # Update progress bar with current bytes size
         Write-Progress -Activity "Processing files" -status "Processing $dataset" -percentComplete ($json_current_size / $total_file_size * 100)
 
-        $new_list_size = ([System.Text.Encoding]::UTF8.GetBytes(($json_records + $message | ConvertTo-Json -Compress))).Length
-        write-debug "Compressed Message Array: $new_list_size"
+        $new_body_size = ([System.Text.Encoding]::UTF8.GetBytes(($json_records + $message | ConvertTo-Json -Compress))).Length
+        write-debug "Compressed Message Array: $new_body_size"
         
         $json_current_size += $message_size  
         # Maximum of 30 MB per post to Azure Monitor Data Collector API but splitting it in 5MB chunks.
-        if ($new_list_size -lt $APILimitBytes -and $json_current_size -ne $total_file_size)
+        if ($new_body_size -lt $APILimitBytes -and $json_current_size -ne $total_file_size)
         {
             $json_records.Add(($message))
             $event_count += 1
