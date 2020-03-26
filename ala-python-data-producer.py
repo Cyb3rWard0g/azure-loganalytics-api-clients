@@ -180,7 +180,7 @@ for dataset in all_files:
             else:
                 if json_current_size == total_file_size:
                     json_records.append(message)
-                    log.debug(f'Appending last {len(json.dumps(message))} bytes')
+                    log.debug(f'Appended last {len(json.dumps(message))} bytes')
                 body = json.dumps(json_records)
                 post_data(WORKSPACE_ID, WORKSPACE_SHARED_KEY, body, LOG_TYPE)
                 if json_current_size != total_file_size:
