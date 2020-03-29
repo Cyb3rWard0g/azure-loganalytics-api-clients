@@ -187,7 +187,8 @@ foreach ($dataset in $all_files)
             Post-LogAnalyticsData -customerId $WorkspaceId -sharedKey $WorkspaceSharedKey -body ([System.Text.Encoding]::UTF8.GetBytes($json_records)) -logType $logType
             if ($json_current_size -ne $total_file_size)
             {
-                $json_records = @($message)
+                $json_records = New-Object System.Collections.ArrayList
+                $json_records.Add($message) > $null
                 If ($PSBoundParameters['Debug'])
                 {
                     $message_size = ([System.Text.Encoding]::UTF8.GetBytes(($message | convertto-json -Compress))).Length
