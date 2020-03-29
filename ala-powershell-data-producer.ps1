@@ -153,7 +153,7 @@ foreach ($dataset in $all_files)
         {
             $message = $line | ConvertFrom-Json
         }
-
+        
         write-debug "############ Event $event_count ###############"
         # Read one line and get its size in bytes
         $message_size = ([System.Text.Encoding]::UTF8.GetBytes(($line | ConvertFrom-Json | convertto-json -Compress))).Length
@@ -169,14 +169,14 @@ foreach ($dataset in $all_files)
         # Maximum of 30 MB per post to Azure Monitor Data Collector API but splitting it in 5MB chunks.
         if ($new_body_size -lt $APILimitBytes -and $json_current_size -ne $total_file_size)
         {
-            $json_records.Add(($message))
+            $json_records.Add($message) > $null
             $event_count += 1
         }
         else
         {
             if ( $json_current_size -eq $total_file_size)
             {
-                $json_records.Add($message)
+                $json_records.Add($message) > $null
                 If ($PSBoundParameters['Debug'])
                 {
                     $message_size = ([System.Text.Encoding]::UTF8.GetBytes(($message | convertto-json -Compress))).Length
