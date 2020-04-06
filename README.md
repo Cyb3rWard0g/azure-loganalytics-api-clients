@@ -4,6 +4,6 @@ A few scripts I put together to send and receive data from an Azure Log Analytic
 
 # To-Do
 
-[ ] Python Data Consumer
-[ ] Powershell Data Producer & Consumer
-[ ] C# Data Producer and Consumer
+* [ ] Python Data Consumer
+* [ ] Powershell Data Consumer
+* [ ] C# Data Producer and Consumer
