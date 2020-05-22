@@ -38,6 +38,7 @@ If ($PSBoundParameters['Debug']) {
     $DebugPreference = 'Continue'
 }
 
+
 @("
    _____  .____       _____    ________          __          
   /  _  \ |    |     /  _  \   \______ \ _____ _/  |______   
@@ -50,8 +51,7 @@ __________                   .___
  |     ___/\_  __ \/  _ \ / __ |  |  \_/ ___\/ __ \_  __ \   
  |    |     |  | \(  <_> ) /_/ |  |  /\  \__\  ___/|  | \/   
  |____|     |__|   \____/\____ |____/  \___  >___  >__|      
-                              \/           \/    \/      V0.0.1
-
+                              \/           \/    \/      V0.0.2
 Creator: Roberto Rodriguez @Cyb3rWard0g
 License: GPL-3.0
  
@@ -129,7 +129,6 @@ Function Post-LogAnalyticsData($customerId, $sharedkey, $body, $logType)
 }
 
 $APILimitBytes = 5 * 1mb
-
 foreach ($dataset in $all_files)
 {
     $total_file_size = (get-item -Path $dataset).Length
@@ -137,11 +136,15 @@ foreach ($dataset in $all_files)
     $json_current_size = 0
     $event_count = 0
 
-    Write-Verbose "Dataset: $dataset"
-    write-verbose "Total File Size: $total_file_size bytes"
+    Write-Host "Dataset: $dataset"
+    Write-Host "Total File Size: $total_file_size bytes"
 
+    # Create ReadLines Iterator and get total number of lines
+    $readLineIterator = [System.IO.File]::ReadLines($dataset)
+    $numberOfLines = [Linq.Enumerable]::Count($readLineIterator)
+    
     # Read each JSON object from file
-    foreach($line in [System.IO.File]::ReadLines($dataset))
+    foreach($line in $readLineIterator)
     {
         if ($PackMessage)
         {
@@ -154,27 +157,32 @@ foreach ($dataset in $all_files)
             $message = $line | ConvertFrom-Json
         }
         
+        # Increase event number
+        $event_count += 1
+
+        # Update progress bar with current event count
+        Write-Progress -Activity "Processing files" -status "Processing $dataset" -percentComplete ($event_count / $numberOfLines * 100)
+
         write-debug "############ Event $event_count ###############"
         # Read one line and get its size in bytes
         $message_size = ([System.Text.Encoding]::UTF8.GetBytes(($line | ConvertFrom-Json | convertto-json -Compress))).Length
         Write-Debug "Reading One Message: $message_size bytes"
 
-        # Update progress bar with current bytes size
-        Write-Progress -Activity "Processing files" -status "Processing $dataset" -percentComplete ($json_current_size / $total_file_size * 100)
-
         $new_body_size = ([System.Text.Encoding]::UTF8.GetBytes(($json_records + $message | ConvertTo-Json -Compress))).Length
         write-debug "Compressed Message Array: $new_body_size"
-        
-        $json_current_size += $message_size  
+
+        # Procesing current bytes from file
+        $json_current_size += $message_size
+        write-debug "Processing the following bytes so far: $json_current_size"
+
         # Maximum of 30 MB per post to Azure Monitor Data Collector API but splitting it in 5MB chunks.
-        if ($new_body_size -lt $APILimitBytes -and $json_current_size -ne $total_file_size)
+        if ($new_body_size -lt $APILimitBytes -and $event_count -ne $numberOfLines)
         {
             $json_records.Add($message) > $null
-            $event_count += 1
         }
         else
         {
-            if ( $json_current_size -eq $total_file_size)
+            if ($event_count -eq $numberOfLines)
             {
                 $json_records.Add($message) > $null
                 If ($PSBoundParameters['Debug'])
@@ -184,8 +192,9 @@ foreach ($dataset in $all_files)
                 }
             }
             $json_records = $json_records | ConvertTo-Json -Compress
+            # Send JSON Blob to Azure Sentinel Log Analytics Workspace
             Post-LogAnalyticsData -customerId $WorkspaceId -sharedKey $WorkspaceSharedKey -body ([System.Text.Encoding]::UTF8.GetBytes($json_records)) -logType $logType
-            if ($json_current_size -ne $total_file_size)
+            if ($event_count -ne $numberOfLines)
             {
                 $json_records = New-Object System.Collections.ArrayList
                 $json_records.Add($message) > $null
@@ -195,10 +204,9 @@ foreach ($dataset in $all_files)
                     Write-Debug "Carrying over $message_size bytes"
                 }
             }
-            $event_count += 1
         }
     }
-    write-verbose "Finished Processing $dataset"
-    write-verbose "Total Events Processed $event_count"
-    write-verbose "Total Bytes Processed: $json_current_size bytes"
+    Write-Host "Finished Processing $dataset"
+    Write-Host "Total Events Processed $event_count"
+    Write-Host "Total Bytes Processed: $json_current_size bytes"
 }
