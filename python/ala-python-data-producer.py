@@ -16,7 +16,7 @@ import hmac
 import base64
 import argparse
 import string
-import tqdm
+from tqdm import tqdm
 from time import sleep
 import os
 import glob
